@@ -1,0 +1,1 @@
+Spring Boot project where test AWS S3 bucket using S3Mock.
