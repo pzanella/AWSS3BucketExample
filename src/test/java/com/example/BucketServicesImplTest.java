@@ -13,6 +13,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.junit4.SpringRunner;
 
@@ -33,11 +34,21 @@ public class BucketServicesImplTest {
 
 	private static org.slf4j.Logger logger = LoggerFactory.getLogger(BucketServicesImpl.class);
 	
-	private static final String UPLOADFILE = "src/test/resources/files/test.txt";
-	private static final String BUCKETNAME = "bucket-test";
-	private static final String FILEPATH = "${user.home}/test.txt";
-	private static final String KEYNAME = "test.txt";
+	@Value("${local.upload.filepath}")
+	private String uploadFilePath;
+	
+	private static String bucketName;
+	@Value("${aws.bucket.name}")
+	public void setBucketName(String bucket) {
+		bucketName = bucket;
+	}
+	
+	@Value("${local.download.filepath}")
+	private String downloadFilePath;
 
+	@Value("${aws.bucket.keyname}")
+	private String keyName;
+	
 	@Autowired
 	BucketServices bucketServices;
 
@@ -46,33 +57,31 @@ public class BucketServicesImplTest {
 	public Utilities utilities;
 	public static AmazonS3 s3client;
 
-	//private static String staticBucketName;
-
 	@Before
 	public void init() {
 		utilities = new Utilities();
 		s3client = utilities.startConnection();
 
 		logger.info("Create bucket in S3 mock.");
-		s3client.createBucket(BUCKETNAME);
+		s3client.createBucket(bucketName);
 
-		assertTrue(s3client.doesBucketExist(BUCKETNAME));
+		assertTrue(s3client.doesBucketExist(bucketName));
 	}
 
 	@Test
 	public void uploadFileBucketTest() throws InterruptedException {
 		logger.info("Upload file in S3Mock.");
-		bucketServices.uploadFile(KEYNAME, UPLOADFILE, s3client);
+		bucketServices.uploadFile(keyName, uploadFilePath, s3client);
 
-		assertThat(s3client.doesObjectExist(BUCKETNAME, KEYNAME));
+		assertThat(s3client.doesObjectExist(bucketName, keyName));
 	}
 
 	@Test
 	public void downloadFileTest() {
 		logger.info("Start downloading file from S3Mock.");
-		bucketServices.downloadFile(KEYNAME, s3client);
+		bucketServices.downloadFile(keyName, s3client);
 
-		file = new File(FILEPATH);
+		file = new File(downloadFilePath);
 		logger.info("ABSOLUTE PATH => " + file.getAbsolutePath());
 		assertTrue(file.exists());
 		assertTrue(file.isFile());
@@ -90,12 +99,12 @@ public class BucketServicesImplTest {
 
 		try {
 
-			ObjectListing object_listing = s3client.listObjects(BUCKETNAME);
+			ObjectListing object_listing = s3client.listObjects(bucketName);
 
 			while (true) {
 				for (Iterator<?> iterator = object_listing.getObjectSummaries().iterator(); iterator.hasNext();) {
 					S3ObjectSummary summary = (S3ObjectSummary) iterator.next();
-					s3client.deleteObject(BUCKETNAME, summary.getKey());
+					s3client.deleteObject(bucketName, summary.getKey());
 				}
 
 				if (object_listing.isTruncated()) {
@@ -107,11 +116,11 @@ public class BucketServicesImplTest {
 
 			logger.info("Removing versions from bucket");
 			VersionListing version_listing = s3client
-					.listVersions(new ListVersionsRequest().withBucketName(BUCKETNAME));
+					.listVersions(new ListVersionsRequest().withBucketName(bucketName));
 			while (true) {
 				for (Iterator<?> iterator = version_listing.getVersionSummaries().iterator(); iterator.hasNext();) {
 					S3VersionSummary vs = (S3VersionSummary) iterator.next();
-					s3client.deleteVersion(BUCKETNAME, vs.getKey(), vs.getVersionId());
+					s3client.deleteVersion(bucketName, vs.getKey(), vs.getVersionId());
 				}
 
 				if (version_listing.isTruncated()) {
@@ -121,7 +130,7 @@ public class BucketServicesImplTest {
 				}
 			}
 
-			s3client.deleteBucket(BUCKETNAME);
+			s3client.deleteBucket(bucketName);
 
 			logger.info("Bucket and files are delete.");
 

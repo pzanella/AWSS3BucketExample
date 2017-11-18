@@ -1,6 +1,3 @@
-/**
- * 
- */
 package com.example.utilities;
 
 import com.amazonaws.auth.AWSStaticCredentialsProvider;
