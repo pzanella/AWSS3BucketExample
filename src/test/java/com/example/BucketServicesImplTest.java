@@ -4,10 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.Assert.assertTrue;
 
 import java.io.File;
-import java.util.Iterator;
 
 import org.junit.After;
-import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -15,129 +13,80 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.junit4.SpringRunner;
 
-import com.amazonaws.AmazonServiceException;
 import com.amazonaws.services.s3.AmazonS3;
-import com.amazonaws.services.s3.model.ListVersionsRequest;
-import com.amazonaws.services.s3.model.ObjectListing;
-import com.amazonaws.services.s3.model.S3ObjectSummary;
-import com.amazonaws.services.s3.model.S3VersionSummary;
-import com.amazonaws.services.s3.model.VersionListing;
+import com.amazonaws.services.s3.model.DeleteBucketRequest;
 import com.example.services.BucketServices;
 import com.example.services.BucketServicesImpl;
-import com.example.utilities.Utilities;
+
+import io.findify.s3mock.S3Mock;
 
 @RunWith(SpringRunner.class)
 @SpringBootTest
+@ActiveProfiles("dev")
 public class BucketServicesImplTest {
 
 	private static org.slf4j.Logger logger = LoggerFactory.getLogger(BucketServicesImpl.class);
-	
+	public S3Mock s3Mock;
+	private File file;
+
 	@Value("${local.upload.filepath}")
 	private String uploadFilePath;
-	
-	private static String bucketName;
+
 	@Value("${aws.bucket.name}")
-	public void setBucketName(String bucket) {
-		bucketName = bucket;
-	}
-	
+	private String bucketName;
+
 	@Value("${local.download.filepath}")
 	private String downloadFilePath;
 
 	@Value("${aws.bucket.keyname}")
 	private String keyName;
-	
+
 	@Autowired
 	BucketServices bucketServices;
 
-	private static File file;
-
-	public Utilities utilities;
-	public static AmazonS3 s3client;
+	@Autowired
+	public AmazonS3 s3client;
 
 	@Before
 	public void init() {
-		utilities = new Utilities();
-		s3client = utilities.startConnection();
+		this.s3Mock = S3Mock.create(8001, "/tmp/s3");
+		this.s3Mock.start();
 
 		logger.info("Create bucket in S3 mock.");
 		s3client.createBucket(bucketName);
 
-		assertTrue(s3client.doesBucketExist(bucketName));
+		assertTrue(s3client.doesBucketExistV2(bucketName));
 	}
 
 	@Test
-	public void uploadFileBucketTest() throws InterruptedException {
+	public void testBucket() {
 		logger.info("Upload file in S3Mock.");
 		bucketServices.uploadFile(keyName, uploadFilePath, s3client);
 
 		assertThat(s3client.doesObjectExist(bucketName, keyName));
-	}
 
-	@Test
-	public void downloadFileTest() {
 		logger.info("Start downloading file from S3Mock.");
 		bucketServices.downloadFile(keyName, s3client);
 
 		file = new File(downloadFilePath);
-		logger.info("ABSOLUTE PATH => " + file.getAbsolutePath());
+
 		assertTrue(file.exists());
 		assertTrue(file.isFile());
+
+		file.delete();
 	}
 
 	@After
-	public void closeConnection() {
+	public void tearDown() {
+		logger.info("Delete bucket.");
+
+		DeleteBucketRequest deleteBucketRequest = new DeleteBucketRequest(bucketName);
+		s3client.deleteBucket(deleteBucketRequest);
+
 		logger.info("Close connection to S3Mock.");
-		utilities.closeConnection();
-	}
-
-	@AfterClass
-	public static void tearDown() {
-		logger.info("Removing objects from bucket");
-
-		try {
-
-			ObjectListing object_listing = s3client.listObjects(bucketName);
-
-			while (true) {
-				for (Iterator<?> iterator = object_listing.getObjectSummaries().iterator(); iterator.hasNext();) {
-					S3ObjectSummary summary = (S3ObjectSummary) iterator.next();
-					s3client.deleteObject(bucketName, summary.getKey());
-				}
-
-				if (object_listing.isTruncated()) {
-					object_listing = s3client.listNextBatchOfObjects(object_listing);
-				} else {
-					break;
-				}
-			}
-
-			logger.info("Removing versions from bucket");
-			VersionListing version_listing = s3client
-					.listVersions(new ListVersionsRequest().withBucketName(bucketName));
-			while (true) {
-				for (Iterator<?> iterator = version_listing.getVersionSummaries().iterator(); iterator.hasNext();) {
-					S3VersionSummary vs = (S3VersionSummary) iterator.next();
-					s3client.deleteVersion(bucketName, vs.getKey(), vs.getVersionId());
-				}
-
-				if (version_listing.isTruncated()) {
-					version_listing = s3client.listNextBatchOfVersions(version_listing);
-				} else {
-					break;
-				}
-			}
-
-			s3client.deleteBucket(bucketName);
-
-			logger.info("Bucket and files are delete.");
-
-		} catch (AmazonServiceException e) {
-			logger.error(e.getMessage());
-		}
-		
-		file.delete();
+		this.s3Mock.stop();
 	}
 }
