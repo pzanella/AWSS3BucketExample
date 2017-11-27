@@ -62,7 +62,7 @@ public class BucketServicesImplTest {
 	}
 
 	@Test
-	public void testBucket() {
+	public void uploadAndDownloadAndDeleteFileTest() {
 		logger.info("Upload file in S3Mock.");
 		bucketServices.uploadFile(keyName, uploadFilePath, s3client);
 
@@ -75,7 +75,12 @@ public class BucketServicesImplTest {
 
 		assertTrue(file.exists());
 		assertTrue(file.isFile());
-
+		
+		logger.info("Delete bucket file.");
+		bucketServices.deleteFiles(keyName, s3client);
+		assertThat(!s3client.doesObjectExist(bucketName, keyName));
+		
+		logger.info("Delete local file.");
 		file.delete();
 	}
 

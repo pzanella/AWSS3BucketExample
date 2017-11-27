@@ -16,18 +16,18 @@ import com.amazonaws.services.s3.model.PutObjectRequest;
 public class BucketServicesImpl implements BucketServices {
 
 	private org.slf4j.Logger logger = LoggerFactory.getLogger(BucketServicesImpl.class);
-	
+
 	@Value("${aws.bucket.name}")
 	private String bucketName;
-	
+
 	@Value("${local.download.filepath}")
 	private String filePath;
-	
+
 	@Override
 	public void uploadFile(String keyName, String uploadFilePath, AmazonS3 s3client) {
 
 		logger.info("uploadFile()");
-		
+
 		try {
 
 			File file = new File(uploadFilePath);
@@ -67,5 +67,29 @@ public class BucketServicesImpl implements BucketServices {
 			logger.info("Error Message: " + ace.getMessage());
 
 		}
+	}
+
+	@Override
+	public boolean deleteFiles(String keyName, AmazonS3 s3client) {
+		
+		logger.info("Deleting object: {} from bucket: {}", keyName, bucketName);
+		
+		try {
+			
+			s3client.deleteObject(bucketName, keyName);
+			logger.info("Object: {} deleted from bucket", keyName);
+			
+			return true;
+		} catch (AmazonServiceException ase) {
+			
+			logger.error("Error Message: {}", ase.getMessage());
+		
+		} catch (AmazonClientException ace) {
+			
+			logger.error("Error Message: {}", ace.getMessage());
+		
+		}
+
+		return false;
 	}
 }
